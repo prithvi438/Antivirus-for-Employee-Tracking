@@ -1,14 +1,15 @@
 {
   "applications": [
     "Antigravity IDE",
-    "WhatsApp",
-    "Brave Browser"
+    "Brave Browser",
+    "WhatsApp"
   ],
   "start_immediately": true,
-  "idle_seconds": 2.0,
-  "switch_min_seconds": 3.0,
-  "switch_max_seconds": 8.0,
-  "action_seconds": 4.0,
+  "idle_seconds": 15.0,
+  "switch_min_seconds": 5.0,
+  "switch_max_seconds": 9.0,
+  "mouse_seconds": 1.0,
+  "action_seconds": 9.0,
   "move_mouse": true,
   "tap_shift": true
 }

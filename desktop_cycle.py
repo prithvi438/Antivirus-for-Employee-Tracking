@@ -32,7 +32,8 @@ def validate(config):
     config.setdefault("switch_min_seconds", 5)
     config.setdefault("switch_max_seconds", 10)
     config.setdefault("start_immediately", True)
-    for key in ("idle_seconds", "switch_min_seconds", "switch_max_seconds", "action_seconds"):
+    config.setdefault("mouse_seconds", 1)
+    for key in ("idle_seconds", "switch_min_seconds", "switch_max_seconds", "action_seconds", "mouse_seconds"):
         config[key] = seconds(config[key])
     if config["switch_max_seconds"] < config["switch_min_seconds"]:
         raise ValueError("Maximum switch delay must be at least the minimum.")
@@ -90,7 +91,8 @@ def setup(path):
         "idle_seconds": idle_seconds,
         "switch_min_seconds": switch_min,
         "switch_max_seconds": switch_max,
-        "action_seconds": timing("Seconds between mouse/key actions", 10),
+        "mouse_seconds": timing("Seconds between mouse movements", 1),
+        "action_seconds": timing("Seconds between optional Shift taps", 10),
         "move_mouse": yes_no("Move the pointer smoothly around the main screen", True),
         "tap_shift": yes_no("Tap Shift (may affect shortcuts or accessibility features)", False),
     }
@@ -172,7 +174,7 @@ def run(config):
 
     index = 0
     movement = None
-    next_switch = next_action = 0
+    next_switch = next_action = next_mouse = 0
     if config["start_immediately"]:
         print("Starting immediately. Manual input pauses automation. Ctrl+C stops.")
     else:
@@ -192,7 +194,7 @@ def run(config):
             if not active:
                 print("Automation active.")
                 active = True
-                next_switch = next_action = now
+                next_switch = next_action = next_mouse = now
             if now >= next_switch:
                 # No shell interpolation; names are resolved before automation starts.
                 subprocess.run(["/usr/bin/open", "-a", paths[index]], check=True, timeout=5)
@@ -202,21 +204,22 @@ def run(config):
                 next_switch = time.monotonic() + delay
                 # Drain pending manual events before sending mouse or key input.
                 continue
+            if now >= next_mouse and config["move_mouse"]:
+                point = Q.CGEventGetLocation(Q.CGEventCreate(None))
+                bounds = Q.CGDisplayBounds(Q.CGMainDisplayID())
+                # Stay away from the menu bar, Dock, and hot corners.
+                margin_x = min(80, bounds.size.width / 4)
+                margin_y = min(80, bounds.size.height / 4)
+                target = (
+                    random.uniform(bounds.origin.x + margin_x,
+                                   bounds.origin.x + bounds.size.width - margin_x),
+                    random.uniform(bounds.origin.y + margin_y,
+                                   bounds.origin.y + bounds.size.height - margin_y),
+                )
+                movement = ((point.x, point.y), target, now,
+                            min(1.5, config["mouse_seconds"] * 0.8))
+                next_mouse = now + config["mouse_seconds"]
             if now >= next_action:
-                if config["move_mouse"]:
-                    point = Q.CGEventGetLocation(Q.CGEventCreate(None))
-                    bounds = Q.CGDisplayBounds(Q.CGMainDisplayID())
-                    # Stay away from the menu bar, Dock, and hot corners.
-                    margin_x = min(80, bounds.size.width / 4)
-                    margin_y = min(80, bounds.size.height / 4)
-                    target = (
-                        random.uniform(bounds.origin.x + margin_x,
-                                       bounds.origin.x + bounds.size.width - margin_x),
-                        random.uniform(bounds.origin.y + margin_y,
-                                       bounds.origin.y + bounds.size.height - margin_y),
-                    )
-                    movement = ((point.x, point.y), target, now,
-                                min(1.5, config["action_seconds"] * 0.8))
                 if config["tap_shift"]:
                     # Always release immediately; never type text into an application.
                     down = Q.CGEventCreateKeyboardEvent(None, 56, True)
